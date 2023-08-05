@@ -30,19 +30,39 @@ function Base.display(xsf::XSFdata{numatoms}) where numatoms
     end
 end
 
+function get_position(string,data)
+    idata = 1
+    for i =1:length(data)
+        u = split(data[i])
+        if length(u) != 0
+            if u[1] == string
+                idata = i 
+                break
+            end
+        end
+        if i == length(data)
+            error("$string  is not found")
+        end
+    end
+    return idata
+end
+
 function XSFdata(filename)
     data = readlines(filename)
     comments = data[1]
-    @assert data[3] == "CRYSTAL" "Only CRYSTAL format is supported. Now $(data[3])"
-    idata = 4
-    @assert data[idata] == "PRIMVEC" "Only PRIMVEC format is supported. Now $(data[4])"
+    idata = 1
+    idata = get_position("CRYSTAL",data)
+    #@assert data[idata] == "CRYSTAL" "Only CRYSTAL format is supported. Now $(data[3])"
+    idata = get_position("PRIMVEC",data)
+    #@assert data[idata] == "PRIMVEC" "Only PRIMVEC format is supported. Now $(data[4])"
     cell = zeros(3,3)    
     for k=1:3
         cell[k,:] = parse.(Float64,split(data[idata+k]))
     end
-    idata = 8
-    @assert data[idata] == "PRIMCOORD" "Only PRIMCORD format is supported. Now $(data[idata])"
-    idata = 9
+    idata = get_position("PRIMCOORD",data)
+    #@assert data[idata] == "PRIMCOORD" "Only PRIMCORD format is supported. Now $(data[idata])"
+    #idata = 9
+    idata += 1
     numatoms = parse(Int64,split(data[idata])[1])
     R = zeros(3,numatoms)
     F = zeros(3,numatoms)
