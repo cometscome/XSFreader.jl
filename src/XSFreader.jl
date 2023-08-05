@@ -159,7 +159,7 @@ function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
                         if Rij2 < Rmax2 && Rij2 > eps
                             push!(indices_j,j)
                             push!(atomkinds_j,xsf.kinds[j])
-                            push!(R_js,R_j)
+                            push!(R_js,R_j-R_i)
                             count += 1
                         end
 
