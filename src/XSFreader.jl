@@ -1,6 +1,6 @@
 module XSFreader
 using LinearAlgebra
-export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix
+export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix,get_number
 # Write your package code here.
 struct XSFdata{numatoms}
     R::Matrix{Float64} #3 x numatoms
@@ -13,6 +13,10 @@ end
 
 function get_energy(xsf::XSFdata)
     return parse(Float64,split(xsf.comments)[5])
+end
+
+function get_number(xsf::XSFdata{num}) where num
+    return num
 end
 
 function Base.display(xsf::XSFdata{numatoms}) where numatoms
