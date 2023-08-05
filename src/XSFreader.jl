@@ -1,6 +1,6 @@
 module XSFreader
 using LinearAlgebra
-export XSFdata,get_energy,get_atoms_inside_the_sphere
+export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix
 # Write your package code here.
 struct XSFdata{numatoms}
     R::Matrix{Float64} #3 x numatoms
@@ -101,6 +101,15 @@ function calculate_pbcbox(xsf::XSFdata,Rmax)
 
     return pbcbox_x ,pbcbox_y ,pbcbox_z 
 
+end
+
+function make_Rmatrix(R_js::Vector{Vector{T}},natoms) where {T<:Real}
+    @assert length(R_js) <= natoms "length(R_js) should be smaller than natoms"
+    R_j = zeros(T,3,natoms)
+    for i=1:length(R_js) 
+        R_j[:,i] .= R_js[i]
+    end
+    return R_j
 end
 
 function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,

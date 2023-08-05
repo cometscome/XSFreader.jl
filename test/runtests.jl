@@ -13,5 +13,8 @@ using Test
     ith_atom = 1
     R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j = get_atoms_inside_the_sphere(xsf,ith_atom,Rmax)
     display(R_js)
+
+    R_j = make_Rmatrix(R_js,200)
+    println(R_j)
     # Write your tests here.
 end
