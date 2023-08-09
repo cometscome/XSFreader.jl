@@ -165,7 +165,7 @@ function make_Rmatrix(R_js::Vector{Vector{T}},atomkinds_j,natoms,kinds) where {T
     return R_j
 end
 
-function get_localRvectors(xsf::XSFdata{numatoms},ith_atom,Rmax,natoms,haskinds=false)
+function get_localRvectors(xsf::XSFdata,ith_atom,Rmax,natoms,haskinds=false) 
     if xsf.haslocalRvectors
     else
         if xsf.haslocalRvectors
