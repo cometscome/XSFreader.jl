@@ -1,6 +1,6 @@
 module XSFreader
 using LinearAlgebra
-export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix,get_number
+export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix,get_number,get_localRvectors
 # Write your package code here.
 
 struct LocalRdata
@@ -21,6 +21,8 @@ mutable struct XSFdata{numatoms}
     const kinds::Vector{String}
     haslocalinfo::Bool
     localinfo::Union{Nothing,LocalRdata}
+    haslocalRvectors::Bool
+    localRvectors::Union{Nothing,Matrix{Float64}}
 end
 
 function get_energy(xsf::XSFdata)
@@ -63,6 +65,8 @@ function get_position(string,data)
     return idata
 end
 
+
+
 function XSFdata(filename)
     data = readlines(filename)
     comments = data[1]
@@ -91,7 +95,7 @@ function XSFdata(filename)
         F[:,i] = parse.(Float64,u[5:end])
         kinds[i] = u[1]
     end
-    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds,false,nothing)
+    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds,false,nothing,false,nothing)
 end
 
 function cross_product!(a,b, c)
@@ -148,11 +152,44 @@ function make_Rmatrix(R_js::Vector{Vector{T}},natoms) where {T<:Real}
     return R_j
 end
 
+function make_Rmatrix(R_js::Vector{Vector{T}},atomkinds_j,natoms,kinds) where {T<:Real}
+    @assert length(R_js) <= natoms "length(R_js) should be smaller than natoms"
+    R_j = zeros(T,4,natoms)
+    for i=1:length(R_js)
+        for k=1:3   
+            R_j[k,i] = R_js[i][k]
+        end
+        R_j[4,i] = findfirst(x -> x == atomkinds_j[i],kinds)
+        #R_j[4,i] = ifelse(atomkinds_j[i]=="H",1,-1)
+    end
+    return R_j
+end
+
+function get_localRvectors(xsf::XSFdata{numatoms},ith_atom,Rmax,natoms,haskinds=false)
+    if xsf.haslocalRvectors
+    else
+        if xsf.haslocalRvectors
+        else
+            get_atoms_inside_the_sphere(xsf,ith_atom,Rmax)
+            xsf.haslocalRvectors = true
+        end
+        if haskinds
+            R_j = make_Rmatrix(R_js,xsf.localinfo.atomkinds_j,natoms,xsf.kinds)
+        else
+            R_j = make_Rmatrix(R_js,natoms) 
+        end
+        xsf.localRvectors = R_j
+        xsf.haslocalRvectors = true
+    end
+
+    return xsf.localRvectors
+end
+
 function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
     ) where {numatoms}
 
     if xsf.haslocalinfo
-        return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
+        #return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
     else
         R_i = zeros(Float64,3)
         for p=1:3
@@ -210,8 +247,10 @@ function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
         end
         xsf.localinfo = LocalRdata(R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j)
         xsf.haslocalinfo = true
-        return R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j
+        #return R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j
     end
+
+    return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
 
     
 
