@@ -169,7 +169,7 @@ function make_Rmatrix(R_js::Vector{Vector{T}},atomkinds_j,natoms,species) where 
             R_j[k,i] = R_js[i][k]
         end
         pos = findfirst(x -> x == atomkinds_j[i],species)
-        println("$i $pos $(atomkinds_j[i]) $species")
+        #println("$i $pos $(atomkinds_j[i]) $species")
         R_j[4,i] = ifelse(nums % 2 ==0,pos-(nums/2+0.5),pos-(nums+1)/2)
         #R_j[4,i] = ifelse(atomkinds_j[i]=="H",1,-1)
     end
@@ -186,7 +186,7 @@ function get_localRvectors(xsf::XSFdata,ith_atom,Rmax,natoms,haskinds=false)
         else
             R_j = make_Rmatrix(localinfo.R_js,natoms) 
         end
-        xsf.localRvectors[ith_atom] = R_j
+        xsf.localRvectors[ith_atom] = deepcopy(R_j)
         xsf.haslocalRvectors[ith_atom] = true
     end
 
