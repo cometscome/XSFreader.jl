@@ -19,10 +19,11 @@ mutable struct XSFdata{numatoms}
     const filename::String
     const cell::Matrix{Float64}
     const kinds::Vector{String}
-    haslocalinfo::Bool
-    localinfo::Union{Nothing,LocalRdata}
-    haslocalRvectors::Bool
-    localRvectors::Union{Nothing,Matrix{Float64}}
+    const species::Vector{String}
+    haslocalinfo::Vector{Bool}
+    localinfo::Vector{Union{Nothing,LocalRdata}}
+    haslocalRvectors::Vector{Bool}
+    localRvectors::Vector{Union{Nothing,Matrix{Float64}}}
 end
 
 function get_energy(xsf::XSFdata)
@@ -87,6 +88,7 @@ function XSFdata(filename)
     R = zeros(3,numatoms)
     F = zeros(3,numatoms)
     kinds = Vector{String}(undef,numatoms)
+    species_set = Set()
     for i=1:numatoms
         idata = idata + 1
         u = split(data[idata])
@@ -94,8 +96,14 @@ function XSFdata(filename)
         R[:,i] = parse.(Float64,u[2:4])
         F[:,i] = parse.(Float64,u[5:end])
         kinds[i] = u[1]
+        push!(species_set,u[1])
     end
-    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds,false,nothing,false,nothing)
+    haslocalinfo = zeros(Bool,numatoms)
+    localinfo = Array{Union{Nothing,LocalRdata}}(undef,numatoms)
+    haslocalRvectors = zeros(Bool,numatoms)
+    localRvectors = Array{Union{Nothing,Matrix{Float64}}}(undef,numatoms)
+    species = collect(species_set)
+    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds,species,haslocalinfo,localinfo,haslocalRvectors,localRvectors)
 end
 
 function cross_product!(a,b, c)
@@ -152,43 +160,43 @@ function make_Rmatrix(R_js::Vector{Vector{T}},natoms) where {T<:Real}
     return R_j
 end
 
-function make_Rmatrix(R_js::Vector{Vector{T}},atomkinds_j,natoms,kinds) where {T<:Real}
+function make_Rmatrix(R_js::Vector{Vector{T}},atomkinds_j,natoms,species) where {T<:Real}
     @assert length(R_js) <= natoms "length(R_js) should be smaller than natoms"
+    nums = length(species)
     R_j = zeros(T,4,natoms)
     for i=1:length(R_js)
         for k=1:3   
             R_j[k,i] = R_js[i][k]
         end
-        R_j[4,i] = findfirst(x -> x == atomkinds_j[i],kinds)
+        pos = findfirst(x -> x == atomkinds_j[i],species)
+        println("$i $pos $(atomkinds_j[i]) $species")
+        R_j[4,i] = ifelse(nums % 2 ==0,pos-(nums/2+0.5),pos-(nums+1)/2)
         #R_j[4,i] = ifelse(atomkinds_j[i]=="H",1,-1)
     end
     return R_j
 end
 
 function get_localRvectors(xsf::XSFdata,ith_atom,Rmax,natoms,haskinds=false) 
-    if xsf.haslocalRvectors
+    if xsf.haslocalRvectors[ith_atom]
     else
-        if xsf.haslocalRvectors
-        else
-            get_atoms_inside_the_sphere(xsf,ith_atom,Rmax)
-            xsf.haslocalRvectors = true
-        end
+        get_atoms_inside_the_sphere(xsf,ith_atom,Rmax)
+        localinfo = xsf.localinfo[ith_atom]
         if haskinds
-            R_j = make_Rmatrix(xsf.localinfo.R_js,xsf.localinfo.atomkinds_j,natoms,xsf.kinds)
+            R_j = make_Rmatrix(localinfo.R_js,localinfo.atomkinds_j,natoms,xsf.species)
         else
-            R_j = make_Rmatrix(xsf.localinfo.R_js,natoms) 
+            R_j = make_Rmatrix(localinfo.R_js,natoms) 
         end
-        xsf.localRvectors = R_j
-        xsf.haslocalRvectors = true
+        xsf.localRvectors[ith_atom] = R_j
+        xsf.haslocalRvectors[ith_atom] = true
     end
 
-    return xsf.localRvectors
+    return xsf.localRvectors[ith_atom]
 end
 
 function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
     ) where {numatoms}
 
-    if xsf.haslocalinfo
+    if xsf.haslocalinfo[ith_atom]
         #return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
     else
         R_i = zeros(Float64,3)
@@ -245,12 +253,14 @@ function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
                 end
             end
         end
-        xsf.localinfo = LocalRdata(R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j)
-        xsf.haslocalinfo = true
+
+        xsf.localinfo[ith_atom] = LocalRdata(R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j)
+        xsf.haslocalinfo[ith_atom] = true
         #return R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j
     end
+    localinfo = xsf.localinfo[ith_atom]
 
-    return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
+    return localinfo.R_i,localinfo.atomkind_i,localinfo.index_i,localinfo.R_js, localinfo.atomkinds_j, localinfo.indices_j
 
     
 
