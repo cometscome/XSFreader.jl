@@ -2,13 +2,25 @@ module XSFreader
 using LinearAlgebra
 export XSFdata,get_energy,get_atoms_inside_the_sphere,make_Rmatrix,get_number
 # Write your package code here.
-struct XSFdata{numatoms}
-    R::Matrix{Float64} #3 x numatoms
-    F::Matrix{Float64} #3 x numatoms
-    comments::String
-    filename::String
-    cell::Matrix{Float64}
-    kinds::Vector{String}
+
+struct LocalRdata
+    R_i::Vector{Float64}
+    atomkind_i::String
+    index_i::Int64
+    R_js::Vector{Vector{Float64}}
+    atomkinds_j::Vector{String}
+    indices_j::Vector{Int64}
+end
+
+mutable struct XSFdata{numatoms}
+    const R::Matrix{Float64} #3 x numatoms
+    const F::Matrix{Float64} #3 x numatoms
+    const comments::String
+    const filename::String
+    const cell::Matrix{Float64}
+    const kinds::Vector{String}
+    haslocalinfo::Bool
+    localinfo::Union{Nothing,LocalRdata}
 end
 
 function get_energy(xsf::XSFdata)
@@ -79,7 +91,7 @@ function XSFdata(filename)
         F[:,i] = parse.(Float64,u[5:end])
         kinds[i] = u[1]
     end
-    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds)
+    return XSFdata{numatoms}(R,F,comments,filename,cell,kinds,false,nothing)
 end
 
 function cross_product!(a,b, c)
@@ -138,62 +150,70 @@ end
 
 function get_atoms_inside_the_sphere(xsf::XSFdata{numatoms},ith_atom,Rmax,
     ) where {numatoms}
-    R_i = zeros(Float64,3)
-    for p=1:3
-        R_i[p] = xsf.R[p,ith_atom]
-    end
-    atomkind_i = xsf.kinds[ith_atom]
-    index_i = ith_atom
-    Rmax2 = Rmax^2
 
-    pbcbox = calculate_pbcbox(xsf,Rmax)
-
-    count = 0
-    box_min1 = -pbcbox[1]
-    box_max1 = pbcbox[1]
-    box_min2 = -pbcbox[2]
-    box_max2 = pbcbox[2] 
-    box_min3 = -pbcbox[3]
-    box_max3 = pbcbox[3]
-
-    lattice_vector_a = xsf.cell[1,:]
-    lattice_vector_b = xsf.cell[2,:]
-    lattice_vector_c = xsf.cell[3,:]
-    R_js = Vector{Float64}[]
-    atomkinds_j = String[]
-    indices_j = Int64[]
-
-    eps = 1e-4
-
-    for j=1:numatoms
-        for box_1= box_min1:box_max1
-            for box_2= box_min2:box_max2
-                for box_3= box_min3:box_max3
-                    if (j == ith_atom && box_1 == 0 && box_2 == 0 && box_3 == 0) == false
-                        R_j = xsf.R[:,j]
-                        for k=1:3
-                            R_j[k] += -box_1 * lattice_vector_a[k] - box_2 * lattice_vector_b[k] - box_3 * lattice_vector_c[k]
+    if xsf.haslocalinfo
+        return xsf.localinfo.R_i,xsf.localinfo.atomkind_i,xsf.localinfo.index_i,xsf.localinfo.R_js, xsf.localinfo.atomkinds_j, xsf.localinfo.indices_j
+    else
+        R_i = zeros(Float64,3)
+        for p=1:3
+            R_i[p] = xsf.R[p,ith_atom]
+        end
+        atomkind_i = xsf.kinds[ith_atom]
+        index_i = ith_atom
+        Rmax2 = Rmax^2
+    
+        pbcbox = calculate_pbcbox(xsf,Rmax)
+    
+        count = 0
+        box_min1 = -pbcbox[1]
+        box_max1 = pbcbox[1]
+        box_min2 = -pbcbox[2]
+        box_max2 = pbcbox[2] 
+        box_min3 = -pbcbox[3]
+        box_max3 = pbcbox[3]
+    
+        lattice_vector_a = xsf.cell[1,:]
+        lattice_vector_b = xsf.cell[2,:]
+        lattice_vector_c = xsf.cell[3,:]
+        R_js = Vector{Float64}[]
+        atomkinds_j = String[]
+        indices_j = Int64[]
+    
+        eps = 1e-4
+    
+        for j=1:numatoms
+            for box_1= box_min1:box_max1
+                for box_2= box_min2:box_max2
+                    for box_3= box_min3:box_max3
+                        if (j == ith_atom && box_1 == 0 && box_2 == 0 && box_3 == 0) == false
+                            R_j = xsf.R[:,j]
+                            for k=1:3
+                                R_j[k] += -box_1 * lattice_vector_a[k] - box_2 * lattice_vector_b[k] - box_3 * lattice_vector_c[k]
+                            end
+    
+                            Rij2 = 0.0
+                            for k=1:3
+                                Rij2 += (R_i[k]-R_j[k])^2
+                            end
+    
+                            if Rij2 < Rmax2 && Rij2 > eps
+                                push!(indices_j,j)
+                                push!(atomkinds_j,xsf.kinds[j])
+                                push!(R_js,R_j-R_i)
+                                count += 1
+                            end
+    
                         end
-
-                        Rij2 = 0.0
-                        for k=1:3
-                            Rij2 += (R_i[k]-R_j[k])^2
-                        end
-
-                        if Rij2 < Rmax2 && Rij2 > eps
-                            push!(indices_j,j)
-                            push!(atomkinds_j,xsf.kinds[j])
-                            push!(R_js,R_j-R_i)
-                            count += 1
-                        end
-
                     end
                 end
             end
         end
+        xsf.localinfo = LocalRdata(R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j)
+        xsf.haslocalinfo = true
+        return R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j
     end
 
-    return R_i,atomkind_i,index_i,R_js, atomkinds_j, indices_j
+    
 
 
 end
