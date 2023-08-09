@@ -174,9 +174,9 @@ function get_localRvectors(xsf::XSFdata,ith_atom,Rmax,natoms,haskinds=false)
             xsf.haslocalRvectors = true
         end
         if haskinds
-            R_j = make_Rmatrix(R_js,xsf.localinfo.atomkinds_j,natoms,xsf.kinds)
+            R_j = make_Rmatrix(xsf.localinfo.R_js,xsf.localinfo.atomkinds_j,natoms,xsf.kinds)
         else
-            R_j = make_Rmatrix(R_js,natoms) 
+            R_j = make_Rmatrix(xsf.localinfo.R_js,natoms) 
         end
         xsf.localRvectors = R_j
         xsf.haslocalRvectors = true
